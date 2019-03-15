@@ -90,7 +90,7 @@ class FaceDataset(BaseDataset):
 
     def read_keypoints(self, A_path, size):        
         # mapping from keypoints to face part 
-        part_list = [[list(range(0, 17)) + list(range(68, 83)) + [0]], # face
+        part_list = [[list(range(0, 17)), # face
                      [range(17, 22)],                                  # right eyebrow
                      [range(22, 27)],                                  # left eyebrow
                      [[28, 31], range(31, 36), [35, 28]],              # nose
@@ -103,11 +103,11 @@ class FaceDataset(BaseDataset):
         keypoints = np.loadtxt(A_path, delimiter=',')
         
         # add upper half face by symmetry
-        pts = keypoints[:17, :].astype(np.int32)
-        baseline_y = (pts[0,1] + pts[-1,1]) / 2
-        upper_pts = pts[1:-1,:].copy()
-        upper_pts[:,1] = baseline_y + (baseline_y-upper_pts[:,1]) * 2 // 3
-        keypoints = np.vstack((keypoints, upper_pts[::-1,:]))  
+        #pts = keypoints[:17, :].astype(np.int32)
+        #baseline_y = (pts[0,1] + pts[-1,1]) / 2
+        #upper_pts = pts[1:-1,:].copy()
+        #upper_pts[:,1] = baseline_y + (baseline_y-upper_pts[:,1]) * 2 // 3
+        #keypoints = np.vstack((keypoints, upper_pts[::-1,:]))  
 
         # label map for facial part
         w, h = size
