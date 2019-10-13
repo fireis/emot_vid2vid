@@ -2,6 +2,7 @@
 ### Licensed under the CC BY-NC-SA 4.0 license (https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode).
 import time
 import os
+import re
 import torch
 from subprocess import call
 
@@ -49,7 +50,11 @@ def train():
 
             for i in range(0, n_frames_total, n_frames_load):
                 input_A, input_B, inst_A = data_loader.dataset.prepare_data(data, i, input_nc, output_nc)
-                
+
+                emotion = torch.tensor(int(re.findall(r"Em([0-9]+)", data["A_path"][0])[0]))
+                emotion = emotion.new_full([1,1,1],int(re.findall(r"Em([0-9]+)", data["A_path"][0])[0]) )
+                # print(emotion)
+
                 ###################################### Forward Pass ##########################
                 ####### generator                  
                 fake_B, fake_B_raw, flow, weight, real_A, real_Bp, fake_B_last = modelG(input_A, input_B, inst_A, fake_B_prev_last)
@@ -60,8 +65,7 @@ def train():
                 flow_ref, conf_ref = flowNet(real_B, real_B_prev)       # reference flows and confidences                
                 fake_B_prev = modelG.module.compute_fake_B_prev(real_B_prev, fake_B_prev_last, fake_B)
                 fake_B_prev_last = fake_B_last
-               
-                losses = modelD(0, reshape([real_B, fake_B, fake_B_raw, real_A, real_B_prev, fake_B_prev, flow, weight, flow_ref, conf_ref]))
+                losses = modelD(0, reshape([real_B, fake_B, fake_B_raw, real_A, real_B_prev, fake_B_prev, flow, weight, flow_ref, conf_ref ]), emotion)
                 losses = [ torch.mean(x) if x is not None else 0 for x in losses ]
                 loss_dict = dict(zip(modelD.module.loss_names, losses))
 
@@ -74,12 +78,12 @@ def train():
                 loss_dict_T = []
                 for s in range(t_scales):                
                     if frames_skipped[0][s] is not None:                        
-                        losses = modelD(s+1, [frame_skipped[s] for frame_skipped in frames_skipped])
+                        losses = modelD(s+1, [frame_skipped[s] for frame_skipped in frames_skipped], emotion)
                         losses = [ torch.mean(x) if not isinstance(x, int) else x for x in losses ]
                         loss_dict_T.append(dict(zip(modelD.module.loss_names_T, losses)))
 
                 # collect losses
-                loss_G, loss_D, loss_D_T, t_scales_act = modelD.module.get_losses(loss_dict, loss_dict_T, t_scales)
+                loss_G, loss_D, loss_D_T, t_scales_act, loss_E_fake, loss_E_real = modelD.module.get_losses(loss_dict, loss_dict_T, t_scales)
 
                 ###################################### Backward Pass #################################                 
                 # update generator weights     
