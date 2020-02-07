@@ -4,7 +4,8 @@ import torch
 from PIL import Image
 import numpy as np
 import cv2
-from skimage import feature
+# from skimage import feature
+import re
 
 from data.base_dataset import BaseDataset, get_img_params, get_transform, get_video_params, concat_frame
 from data.image_folder import make_grouped_dataset, check_path_valid
@@ -74,13 +75,14 @@ class FaceDataset(BaseDataset):
 
         # draw edges and possibly add distance transform maps
         add_dist_map = not self.opt.no_dist_map
-        im_edges, dist_tensor = self.draw_face_edges(keypoints, part_list, transform_A, size, add_dist_map)
+        im_edges, dist_tensor = self.draw_face_edges(keypoints, part_list, transform_A, size, add_dist_map, A_path)
         
         # canny edge for background
-        if not self.opt.no_canny_edge:
-            edges = feature.canny(np.array(img.convert('L')))        
-            edges = edges * (part_labels == 0)  # remove edges within face
-            im_edges += (edges * 255).astype(np.uint8)
+        # if not self.opt.no_canny_edge:
+        #     edges = feature.canny(np.array(img.convert('L')))
+        #     edges = edges * (part_labels == 0)  # remove edges within face
+        #     im_edges += (edges * 255).astype(np.uint8)
+        # Image.fromarray(self.crop(im_edges)).save(A_path.replace("txt", "png").replace("keypoints", "gambi_image"))
         edge_tensor = transform_A(Image.fromarray(self.crop(im_edges)))
 
         # final input tensor
@@ -111,11 +113,29 @@ class FaceDataset(BaseDataset):
 
         # label map for facial part
         w, h = size
-        part_labels = np.zeros((h, w), np.uint8)
-        for p, edge_list in enumerate(part_list):                
+        emot = int(re.findall(r"Em([0-9]+)", A_path)[0])
+        if emot == 1:
+            color = 0
+            color_shape = 255
+        elif emot == 9:
+            color = 85
+            color_shape = 170
+        elif emot == 13:
+            color = 170
+            color_shape = 85
+        elif emot == 22:
+            color = 255
+            color_shape = 0
+
+        # color = int(re.findall(r"Em([0-9]+)",A_path)[0]) * 10
+        part_labels = np.full((h, w),color, np.uint8)
+        for p, edge_list in enumerate(part_list):
             indices = [item for sublist in edge_list for item in sublist]
             pts = keypoints[indices, :].astype(np.int32)
-            cv2.fillPoly(part_labels, pts=[pts], color=label_list[p]) 
+            cv2.fillPoly(part_labels, pts=[pts], color=color_shape)
+
+        # img_to_write = A_path.replace("txt", "png").replace("keypoints", "gambi_image")
+        # cv2.imwrite(img_to_write, part_labels)
 
         # move the keypoints a bit
         if not self.opt.isTrain and self.opt.random_scale_points:
@@ -126,15 +146,31 @@ class FaceDataset(BaseDataset):
 
         return keypoints, part_list, part_labels
 
-    def draw_face_edges(self, keypoints, part_list, transform_A, size, add_dist_map):
+    def draw_face_edges(self, keypoints, part_list, transform_A, size, add_dist_map, A_path):
         w, h = size
         edge_len = 3  # interpolate 3 keypoints to form a curve when drawing edges
         # edge map for face region from keypoints
-        im_edges = np.zeros((h, w), np.uint8) # edge map for all edges
+        # im_edges = np.zeros((h, w), np.uint8) # edge map for all edges
+        emot = int(re.findall(r"Em([0-9]+)", A_path)[0])
+        if emot == 1:
+            color = 0
+            color_edge = (255, 255, 255)
+        elif emot == 9:
+            color = 85
+            color_edge = (170, 170, 170)
+        elif emot == 13:
+            color = 170
+            color_edge = (85, 85, 85)
+        elif emot == 22:
+            color = 255
+            color_edge = (0, 0, 0)
+        im_edges = np.full((h, w), color, np.uint8)
         dist_tensor = 0
         e = 1                
         for edge_list in part_list:
             for edge in edge_list:
+
+                # im_edge = np.full((h, w), color, np.uint8)
                 im_edge = np.zeros((h, w), np.uint8) # edge map for the current edge
                 for i in range(0, max(1, len(edge)-1), edge_len-1): # divide a long edge into multiple small edges when drawing
                     sub_edge = edge[i:i+edge_len]
@@ -142,7 +178,8 @@ class FaceDataset(BaseDataset):
                     y = keypoints[sub_edge, 1]
                                     
                     curve_x, curve_y = interpPoints(x, y) # interp keypoints to get the curve shape                    
-                    drawEdge(im_edges, curve_x, curve_y)
+
+                    drawEdge(im_edges, curve_x, curve_y, color=color_edge)
                     if add_dist_map:
                         drawEdge(im_edge, curve_x, curve_y)
                                 
@@ -152,8 +189,9 @@ class FaceDataset(BaseDataset):
                     im_dist = Image.fromarray(im_dist)
                     tensor_cropped = transform_A(self.crop(im_dist))                    
                     dist_tensor = tensor_cropped if e == 1 else torch.cat([dist_tensor, tensor_cropped])
+                    # im_dist.save(A_path.replace("txt", "png").replace("keypoints", "gambi_image"))
                     e += 1
-
+        # np.save(im_edges,A_path.replace("txt", "png").replace("keypoints", "gambi_image"))
         return im_edges, dist_tensor
 
     def get_crop_coords(self, keypoints, size):                
