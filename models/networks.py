@@ -823,7 +823,7 @@ class GANLossEmotion(nn.Module):
     def get_target_tensor(self, input, target_is_real, emotion):
         target_tensor = None
         gpu_id = input.get_device()
-        emotion = emotion.data.tolist()[0][0][0]
+        emotion = (23 - emotion.data.tolist()[0][0][0])/23
         if target_is_real:
             create_label = ((self.real_label_var is None) or
                             (self.real_label_var.numel() != input.numel()))
