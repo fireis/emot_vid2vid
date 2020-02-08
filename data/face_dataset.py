@@ -113,19 +113,21 @@ class FaceDataset(BaseDataset):
 
         # label map for facial part
         w, h = size
-        emot = int(re.findall(r"Em([0-9]+)", A_path)[0])
-        if emot == 1:
-            color = 0
-            color_shape = 255
-        elif emot == 9:
-            color = 85
-            color_shape = 170
-        elif emot == 13:
-            color = 170
-            color_shape = 85
-        elif emot == 22:
-            color = 255
-            color_shape = 0
+        # emot = int(re.findall(r"Em([0-9]+)", A_path)[0])
+        # if emot == 1:
+        #     color = 0
+        #     color_shape = 255
+        # elif emot == 9:
+        #     color = 85
+        #     color_shape = 170
+        # elif emot == 13:
+        #     color = 170
+        #     color_shape = 85
+        # elif emot == 22:
+        #     color = 255
+        #     color_shape = 0
+        color = 255
+        color_shape = 0
 
         # color = int(re.findall(r"Em([0-9]+)",A_path)[0]) * 10
         part_labels = np.full((h, w),color, np.uint8)
@@ -151,22 +153,24 @@ class FaceDataset(BaseDataset):
         edge_len = 3  # interpolate 3 keypoints to form a curve when drawing edges
         # edge map for face region from keypoints
         # im_edges = np.zeros((h, w), np.uint8) # edge map for all edges
-        emot = int(re.findall(r"Em([0-9]+)", A_path)[0])
-        if emot == 1:
-            color = 0
-            color_edge = (255, 255, 255)
-        elif emot == 9:
-            color = 85
-            color_edge = (170, 170, 170)
-        elif emot == 13:
-            color = 170
-            color_edge = (85, 85, 85)
-        elif emot == 22:
-            color = 255
-            color_edge = (0, 0, 0)
+        # emot = int(re.findall(r"Em([0-9]+)", A_path)[0])
+        # if emot == 1:
+        #     color = 0
+        #     color_edge = (255, 255, 255)
+        # elif emot == 9:
+        #     color = 85
+        #     color_edge = (170, 170, 170)
+        # elif emot == 13:
+        #     color = 170
+        #     color_edge = (85, 85, 85)
+        # elif emot == 22:
+        #     color = 255
+        #     color_edge = (0, 0, 0)
+        color = 255
+        color_edge = (0, 0, 0)
         im_edges = np.full((h, w), color, np.uint8)
         dist_tensor = 0
-        e = 1                
+        e = 1
         for edge_list in part_list:
             for edge in edge_list:
 
