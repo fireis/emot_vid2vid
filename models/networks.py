@@ -67,15 +67,6 @@ def define_D(input_nc, ndf, n_layers_D, norm='instance', num_D=1, getIntermFeat=
     netD.apply(weights_init)
     return netD
 
-def define_E(input_nc, nef, n_layers_E, norm='instance', num_E=1, getIntermFeat=False, gpu_ids=[]):
-    norm_layer = get_norm_layer(norm_type=norm)
-    netE = MultiscaleDiscriminator(input_nc, nef, n_layers_E, norm_layer, num_E, getIntermFeat)
-    print_network(netE)
-    if len(gpu_ids) > 0:
-        netE.cuda(gpu_ids[0])
-    netE.apply(weights_init)
-    return netE
-
 def print_network(net):
     if isinstance(net, list):
         net = net[0]

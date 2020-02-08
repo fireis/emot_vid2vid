@@ -34,12 +34,6 @@ class Vid2VidModelD(BaseModel):
                
         self.netD = networks.define_D(netD_input_nc, opt.ndf, opt.n_layers_D, opt.norm,
                                       opt.num_D, not opt.no_ganFeat, gpu_ids=self.gpu_ids)
-        emot_count = 4
-        nef = 32
-        n_layers_E = 3
-        # norm = 'batch'
-        num_E = 2
-        self.netE= networks.define_E(netD_input_nc, nef, n_layers_E, opt.norm, num_E,not opt.no_ganFeat, gpu_ids=self.gpu_ids  )
 
         if opt.add_face_disc:            
             self.netD_f = networks.define_D(netD_input_nc, opt.ndf, opt.n_layers_D, opt.norm,
@@ -65,8 +59,6 @@ class Vid2VidModelD(BaseModel):
         # set loss functions and optimizers          
         self.old_lr = opt.lr
         # define loss functions
-        # self.criterionEmotion = networks.CrossEntropyLoss()
-        self.criterionEmotion = networks.GANLossEmotion(opt.gan_mode, tensor=self.Tensor)
         self.criterionGAN = networks.GANLoss(opt.gan_mode, tensor=self.Tensor)   
         self.criterionFlow = networks.MaskedL1Loss()
         self.criterionWarp = networks.MaskedL1Loss()
@@ -75,8 +67,8 @@ class Vid2VidModelD(BaseModel):
             self.criterionVGG = networks.VGGLoss(self.gpu_ids[0])
 
         self.loss_names = ['G_VGG', 'G_GAN', 'G_GAN_Feat',                            
-                           'D_real', 'D_fake','E_real', 'E_fake',
-                           'G_Warp', 'F_Flow', 'F_Warp', 'W', 'D_Emotion']
+                           'D_real', 'D_fake',
+                           'G_Warp', 'F_Flow', 'F_Warp', 'W']
         self.loss_names_T = ['G_T_GAN', 'G_T_GAN_Feat', 'D_T_real', 'D_T_fake', 'G_T_Warp']     
         if opt.add_face_disc:
             self.loss_names += ['G_f_GAN', 'G_f_GAN_Feat', 'D_f_real', 'D_f_fake']
@@ -98,7 +90,7 @@ class Vid2VidModelD(BaseModel):
             optimizer_D_T = torch.optim.Adam(params, lr=opt.lr, betas=(opt.beta1, 0.999))            
             setattr(self, 'optimizer_D_T'+str(s), optimizer_D_T)    
 
-    def forward(self, scale_T, tensors_list, emotion, dummy_bs=0):
+    def forward(self, scale_T, tensors_list, dummy_bs=0):
         lambda_feat = self.opt.lambda_feat
         lambda_F = self.opt.lambda_F
         lambda_T = self.opt.lambda_T
@@ -120,9 +112,7 @@ class Vid2VidModelD(BaseModel):
             loss_list = [loss.view(-1, 1) for loss in loss_list]
             return loss_list            
 
-        # real_B, fake_B, fake_B_raw, real_A, real_B_prev, fake_B_prev, flow, weight, flow_ref, conf_ref, emotion = tensors_list
         real_B, fake_B, fake_B_raw, real_A, real_B_prev, fake_B_prev, flow, weight, flow_ref, conf_ref = tensors_list
-
         _, _, self.height, self.width = real_B.size()
 
         ################### Flow loss #################
@@ -145,28 +135,16 @@ class Vid2VidModelD(BaseModel):
         ### VGG + GAN loss 
         loss_G_VGG = (self.criterionVGG(fake_B, real_B) * lambda_feat) if not self.opt.no_vgg else torch.zeros_like(loss_W)
         loss_D_real, loss_D_fake, loss_G_GAN, loss_G_GAN_Feat = self.compute_loss_D(self.netD, real_A, real_B, fake_B)
-        loss_E_real, loss_E_fake = self.compute_loss_E(self.netE, real_A, real_B, fake_B, emotion)
         ### Warp loss
         fake_B_warp_ref = self.resample(fake_B_prev, flow_ref)
         loss_G_Warp = self.criterionWarp(fake_B, fake_B_warp_ref.detach(), conf_ref) * lambda_T
-
-        # emot = True
-        # if emot == True:
-        #     # true_emot =
-        #     # emotion = torch.tensor(1)
-        #     loss_E_real, loss_E_fake = self.compute_loss_E(self.netE, real_A, real_B, fake_B, emotion)
-        #     # loss_E_real, loss_E_fake = self.compute_loss_E(self.netE, real_A, real_B, fake_B, [1,0,0])
-        #     print(loss_E_real, loss_E_fake)
-
 
         if fake_B_raw is not None:
             if not self.opt.no_vgg:
                 loss_G_VGG += self.criterionVGG(fake_B_raw, real_B) * lambda_feat        
             l_D_real, l_D_fake, l_G_GAN, l_G_GAN_Feat = self.compute_loss_D(self.netD, real_A, real_B, fake_B_raw)
-            E_1_real, E_1_fake = self.compute_loss_E(self.netE, real_A, real_B, fake_B, emotion)
             loss_G_GAN += l_G_GAN; loss_G_GAN_Feat += l_G_GAN_Feat
             loss_D_real += l_D_real; loss_D_fake += l_D_fake
-            loss_E_real += E_1_real; loss_E_fake += E_1_fake
 
         if self.opt.add_face_disc:
             face_weight = 2
@@ -180,7 +158,7 @@ class Vid2VidModelD(BaseModel):
                 loss_D_f_real = loss_D_f_fake = loss_G_f_GAN = loss_G_f_GAN_Feat = torch.zeros_like(loss_D_real)
 
         loss_list = [loss_G_VGG, loss_G_GAN, loss_G_GAN_Feat,
-                     loss_D_real, loss_D_fake, loss_E_real, loss_E_fake,
+                     loss_D_real, loss_D_fake,
                      loss_G_Warp, loss_F_Flow, loss_F_Warp, loss_W]
         if self.opt.add_face_disc:
             loss_list += [loss_G_f_GAN, loss_G_f_GAN_Feat, loss_D_f_real, loss_D_f_fake]   
@@ -192,7 +170,6 @@ class Vid2VidModelD(BaseModel):
         fake_AB = torch.cat((real_A, fake_B), dim=1)
         pred_real = netD.forward(real_AB)
         pred_fake = netD.forward(fake_AB.detach())
-
         loss_D_real = self.criterionGAN(pred_real, True) 
         loss_D_fake = self.criterionGAN(pred_fake, False)
 
@@ -200,23 +177,6 @@ class Vid2VidModelD(BaseModel):
         loss_G_GAN, loss_G_GAN_Feat = self.GAN_and_FM_loss(pred_real, pred_fake)      
 
         return loss_D_real, loss_D_fake, loss_G_GAN, loss_G_GAN_Feat
-
-    def compute_loss_E(self, netE, real_A, real_B, fake_B, emotion):
-        real_AB = torch.cat((real_A, real_B), dim=1)
-        fake_AB = torch.cat((real_A, fake_B), dim=1)
-        pred_real = netE.forward(real_AB)
-        pred_fake = netE.forward(fake_AB.detach())
-
-        # if emotion == pred_real:
-        #     res = True
-        # else:
-        #     res = False
-
-        loss_emot_real = self.criterionEmotion(pred_real, True, emotion)
-        loss_emot_fake = self.criterionEmotion(pred_fake, False, emotion)
-
-        return loss_emot_real, loss_emot_fake
-
 
     def compute_loss_D_T(self, real_B, fake_B, flow_ref, conf_ref, scale_T):         
         netD_T = getattr(self, 'netD_T'+str(scale_T))
@@ -287,8 +247,7 @@ class Vid2VidModelD(BaseModel):
         return frames_all, frames_skipped
 
     def get_losses(self, loss_dict, loss_dict_T, t_scales):
-        # print(loss_dict['E_fake'],  loss_dict['E_real'])
-        loss_D = (loss_dict['D_fake'] + loss_dict['D_real'] + loss_dict['E_fake'] + loss_dict['E_real']) * 0.5
+        loss_D = (loss_dict['D_fake'] + loss_dict['D_real']) * 0.5
         loss_G = loss_dict['G_GAN'] + loss_dict['G_GAN_Feat'] + loss_dict['G_VGG']
         loss_G += loss_dict['G_Warp'] + loss_dict['F_Flow'] + loss_dict['F_Warp'] + loss_dict['W']
         if self.opt.add_face_disc:
@@ -302,7 +261,7 @@ class Vid2VidModelD(BaseModel):
             loss_G += loss_dict_T[s]['G_T_GAN'] + loss_dict_T[s]['G_T_GAN_Feat'] + loss_dict_T[s]['G_T_Warp']                
             loss_D_T.append((loss_dict_T[s]['D_T_fake'] + loss_dict_T[s]['D_T_real']) * 0.5)
 
-        return loss_G, loss_D, loss_D_T, t_scales_act, loss_dict['E_fake'],  loss_dict['E_real']
+        return loss_G, loss_D, loss_D_T, t_scales_act
 
     def save(self, label):
         self.save_network(self.netD, 'D', label, self.gpu_ids)         

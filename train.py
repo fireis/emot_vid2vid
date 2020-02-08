@@ -65,7 +65,8 @@ def train():
                 flow_ref, conf_ref = flowNet(real_B, real_B_prev)       # reference flows and confidences                
                 fake_B_prev = modelG.module.compute_fake_B_prev(real_B_prev, fake_B_prev_last, fake_B)
                 fake_B_prev_last = fake_B_last
-                losses = modelD(0, reshape([real_B, fake_B, fake_B_raw, real_A, real_B_prev, fake_B_prev, flow, weight, flow_ref, conf_ref ]), emotion)
+
+                losses = modelD(0, reshape([real_B, fake_B, fake_B_raw, real_A, real_B_prev, fake_B_prev, flow, weight, flow_ref, conf_ref]))
                 losses = [ torch.mean(x) if x is not None else 0 for x in losses ]
                 loss_dict = dict(zip(modelD.module.loss_names, losses))
 
@@ -78,12 +79,12 @@ def train():
                 loss_dict_T = []
                 for s in range(t_scales):                
                     if frames_skipped[0][s] is not None:                        
-                        losses = modelD(s+1, [frame_skipped[s] for frame_skipped in frames_skipped], emotion)
+                        losses = modelD(s+1, [frame_skipped[s] for frame_skipped in frames_skipped])
                         losses = [ torch.mean(x) if not isinstance(x, int) else x for x in losses ]
                         loss_dict_T.append(dict(zip(modelD.module.loss_names_T, losses)))
 
                 # collect losses
-                loss_G, loss_D, loss_D_T, t_scales_act, loss_E_fake, loss_E_real = modelD.module.get_losses(loss_dict, loss_dict_T, t_scales)
+                loss_G, loss_D, loss_D_T, t_scales_act = modelD.module.get_losses(loss_dict, loss_dict_T, t_scales)
 
                 ###################################### Backward Pass #################################                 
                 # update generator weights     
