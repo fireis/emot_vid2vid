@@ -8,6 +8,10 @@ from torch.autograd import Variable
 import numpy as np
 import torch.nn.functional as F
 import copy
+import util.util as util
+from util.visualizer import Visualizer
+import argparse
+from collections import OrderedDict
 
 ###############################################################################
 # Functions
@@ -41,7 +45,7 @@ def define_G(input_nc, output_nc, prev_output_nc, ngf, which_model_netG, n_downs
         netG = Global_with_z(input_nc, output_nc, opt.feat_num, ngf, n_downsampling, opt.n_blocks, norm_layer)     
     elif which_model_netG == 'local_with_features':    
         netG = Local_with_z(input_nc, output_nc, opt.feat_num, ngf, n_downsampling, opt.n_blocks, opt.n_local_enhancers, opt.n_blocks_local, norm_layer)
-
+    # default value
     elif which_model_netG == 'composite':
         netG = CompositeGenerator(opt, input_nc, output_nc, prev_output_nc, ngf, n_downsampling, opt.n_blocks, opt.fg, opt.no_flow, norm_layer)
     elif which_model_netG == 'compositeLocal':
@@ -117,7 +121,8 @@ class BaseNetwork(nn.Module):
     def resample(self, image, flow):        
         b, c, h, w = image.size()        
         if not hasattr(self, 'grid') or self.grid.size() != flow.size():
-            self.grid = get_grid(b, h, w, gpu_id=flow.get_device(), dtype=flow.dtype)            
+            self.grid = get_grid(b, h, w, gpu_id=flow.get_device(), dtype=flow.dtype)
+        # concatenates
         flow = torch.cat([flow[:, 0:1, :, :] / ((w - 1.0) / 2.0), flow[:, 1:2, :, :] / ((h - 1.0) / 2.0)], dim=1)        
         final_grid = (self.grid + flow).permute(0, 2, 3, 1).cuda(image.get_device())
         output = self.grid_sample(image, final_grid)
@@ -132,8 +137,10 @@ class CompositeGenerator(BaseNetwork):
         self.n_downsampling = n_downsampling
         self.use_fg_model = use_fg_model
         self.no_flow = no_flow
+        self.counter = 0
         activation = nn.ReLU(True)
-        
+
+        # default false
         if use_fg_model:
             ### individial image generation
             ngf_indv = ngf // 2 if n_downsampling > 2 else ngf
@@ -160,6 +167,7 @@ class CompositeGenerator(BaseNetwork):
         ### flow and image generation
         ### downsample        
         model_down_seg = [nn.ReflectionPad2d(3), nn.Conv2d(input_nc, ngf, kernel_size=7, padding=0), norm_layer(ngf), activation]
+        # n_downsampling default 3
         for i in range(n_downsampling):
             mult = 2**i
             model_down_seg += [nn.Conv2d(ngf * mult, ngf * mult * 2, kernel_size=3, stride=2, padding=1),
@@ -191,6 +199,7 @@ class CompositeGenerator(BaseNetwork):
             model_final_flow = [nn.ReflectionPad2d(3), nn.Conv2d(ngf, 2, kernel_size=7, padding=0)]                
             model_final_w = [nn.ReflectionPad2d(3), nn.Conv2d(ngf, 1, kernel_size=7, padding=0), nn.Sigmoid()] 
 
+        # default false
         if use_fg_model:
             self.indv_down = nn.Sequential(*indv_down)
             self.indv_res = nn.Sequential(*indv_res)
@@ -228,8 +237,40 @@ class CompositeGenerator(BaseNetwork):
             img_warp = self.resample(img_prev[:,-3:,...].cuda(gpu_id), flow).cuda(gpu_id)        
             weight_ = weight.expand_as(img_raw)
             img_final = img_raw * weight_ + img_warp * (1-weight_)
-        
+        DEBUG = False
+        if DEBUG:
+            opt = argparse.Namespace(add_face_disc=False, aspect_ratio=1.0, basic_point_only=False, batchSize=1, checkpoints_dir='./checkpoints', dataroot='test_sat_first', dataset_mode='face', debug=False, densepose_only=False, display_id=0, display_winsize=512, feat_num=3, fg=False, fg_labels=[26], fineSize=512, fp16=False, gpu_ids=[0], how_many=9999, input_nc=15, isTrain=False, label_feat=False, label_nc=0, loadSize=256, load_features=False, load_pretrain='', local_rank=0, max_dataset_size=np.inf, model='vid2vid', nThreads=0, n_blocks=9, n_blocks_local=3, n_downsample_E=3, n_downsample_G=3, n_frames_G=3, n_gpus_gen=1, n_local_enhancers=1, n_scales_spatial=1, name='e14_256', ndf=64, nef=32, netE='simple', netG='composite', ngf=128, no_canny_edge=True, no_dist_map=False, no_first_img=False, no_flip=True, no_flow=False, norm='batch', ntest=np.inf, openpose_only=False, output_nc=3, phase='test', random_drop_prob=0.05, random_scale_points=False, remove_face_labels=False, resize_or_crop='scaleWidth', results_dir='siggraph_res_sat_first', serial_batches=True, start_frame=0, tf_log=False, use_instance=False, use_real_img=True, use_single_G=False, which_epoch='160')
+            visualizer = Visualizer(opt)
+
+            res_flow_save = util.tensor2im(res_flow)
+            flow_feat_save = util.tensor2im(flow_feat)
+            img_final_save= util.tensor2im(img_final)
+            img_raw_save= util.tensor2im(img_raw )
+            weight_save= util.tensor2im(weight_)
+            img_warp_save= util.tensor2im(img_warp)
+            inv_wei = util.tensor2im((1-weight_))
+            flow_save = util.tensor2im(flow)
+            img_prev_save = util.tensor2im((img_prev[:,-3:,...]))
+            img_weight = util.tensor2im(img_raw * weight_)
+            ing_warp_weight = util.tensor2im( img_warp * (1-weight_))
+            imgs_to_save_present = [("res_flow", res_flow_save),
+                                    ("flow_feat", flow_feat_save),
+                                    ("flow", flow_save),
+                                    ("img_prev", img_prev_save),
+                                    ("img_final", img_final_save),
+                                    ("img_raw", img_raw_save),
+                                     ("weight_", weight_save),
+                                     ("img_warp", img_warp_save),
+                                     ("(1-weight_)", inv_wei),
+                                    ("img_weight", img_weight),
+                                    ("ing_warp_weight", ing_warp_weight)]
+            visuals = OrderedDict(imgs_to_save_present)
+            name_pt = str(self.counter).zfill(3)
+            visualizer.save_images("C://test/",visuals ,name_pt)
+            self.counter += 1
+
         img_fg_feat = None
+        # default false
         if self.use_fg_model:
             img_fg_feat = self.indv_up(self.indv_res(self.indv_down(input)))
             img_fg = self.indv_final(img_fg_feat)
@@ -237,6 +278,7 @@ class CompositeGenerator(BaseNetwork):
             mask = mask.cuda(gpu_id).expand_as(img_raw)            
             img_final = img_fg * mask + img_final * (1-mask) 
             img_raw = img_fg * mask + img_raw * (1-mask)                 
+
 
         return img_final, flow, weight, img_raw, img_feat, flow_feat, img_fg_feat
 
@@ -648,7 +690,7 @@ class MultiscaleDiscriminator(nn.Module):
         self.n_layers = n_layers
         self.getIntermFeat = getIntermFeat
         ndf_max = 64
-     
+     # num_D used=2
         for i in range(num_D):
             netD = NLayerDiscriminator(input_nc, min(ndf_max, ndf*(2**(num_D-1-i))), n_layers, norm_layer,
                                        getIntermFeat)

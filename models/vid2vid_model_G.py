@@ -28,6 +28,7 @@ class Vid2VidModelG(BaseModel):
         self.split_gpus = (self.opt.n_gpus_gen < len(self.opt.gpu_ids)) and (self.opt.batchSize == 1)
 
         input_nc = opt.label_nc if opt.label_nc != 0 else opt.input_nc
+        # label_nc = 0 input_nc = 15 output_nc=15 n_frames_g=3 ngf 128 blocks
         netG_input_nc = input_nc * opt.n_frames_G
         if opt.use_instance:
             netG_input_nc += opt.n_frames_G        

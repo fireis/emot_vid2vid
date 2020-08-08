@@ -116,7 +116,9 @@ class Visualizer():
         image_dir = os.path.join(image_dir, dirname)
         util.mkdir(image_dir)
         name = os.path.basename(image_path[0])
-        name = os.path.splitext(name)[0]        
+        name = os.path.splitext(name)[0]
+        if image_dir == "C://test/":
+            name = image_path
 
         if webpage is not None:
             webpage.add_header(name)
@@ -124,6 +126,7 @@ class Visualizer():
 
         for label, image_numpy in visuals.items():
             save_ext = 'png' if 'real_A' in label and self.opt.label_nc != 0 else 'jpg'
+            save_ext = 'png'
             image_name = '%s_%s.%s' % (label, name, save_ext)
             save_path = os.path.join(image_dir, image_name)
             util.save_image(image_numpy, save_path)

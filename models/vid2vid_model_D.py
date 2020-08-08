@@ -108,7 +108,7 @@ class Vid2VidModelD(BaseModel):
             tensors_list = util.remove_dummy_from_tensor(tensors_list, dummy_bs)
             if tensors_list[0].size(0) == 0:                
                 return [self.Tensor(1, 1).fill_(0)] * (len(self.loss_names_T) if scale_T > 0 else len(self.loss_names))
-        
+        # scale_t seems to be how many tempooral disc will run
         if scale_T > 0:
             real_B, fake_B, flow_ref, conf_ref = tensors_list
             _, _, _, self.height, self.width = real_B.size()

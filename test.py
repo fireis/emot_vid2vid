@@ -23,6 +23,7 @@ if opt.dataset_mode == 'temporal':
 data_loader = CreateDataLoader(opt)
 dataset = data_loader.load_data()
 model = create_model(opt)
+
 visualizer = Visualizer(opt)
 input_nc = 1 if opt.label_nc != 0 else opt.input_nc
 
